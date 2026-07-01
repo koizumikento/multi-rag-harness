@@ -1,0 +1,1 @@
+"""Graph extraction result handling."""
