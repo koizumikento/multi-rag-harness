@@ -37,7 +37,7 @@ that work together:
 - Do not require paid embedding or reranking APIs for the local retrieval path.
 - Do not make the Python server responsible for high-level agent reasoning.
 
-## High-level Architecture
+## High-level System Shape
 
 ```text
 Python application / orchestrator
@@ -728,4 +728,3 @@ server_name = "multi-rag-harness"
 - How should Codex extraction jobs be batched and cached?
 - How should source spans be represented for non-text sources later?
 - What is the first benchmark set for retrieval quality?
-

@@ -1,4 +1,4 @@
-# Architecture
+# Project Structure
 
 This document describes the repository layout, package responsibilities, and
 dependency direction for `multi-rag-harness`.
@@ -13,7 +13,7 @@ multi-rag-harness/
 ├── AGENTS.md
 ├── README.md
 ├── docs/
-│   ├── architecture.md
+│   ├── project-structure.md
 │   ├── mcp-tools.md
 │   ├── specification.md
 │   └── storage.md
@@ -41,7 +41,7 @@ multi-rag-harness/
 
 ### `AGENTS.md`
 
-Persistent project guidance for Codex. Keep durable rules here: architecture
+Persistent project guidance for Codex. Keep durable rules here: project
 boundaries, dependency management, verification commands, and implementation
 expectations.
 
@@ -55,7 +55,7 @@ Project design documentation.
 
 - `specification.md`: source of truth for scope, supported RAG methods, MCP
   tools, data model, and retrieval flow.
-- `architecture.md`: repository layout, package boundaries, and dependency
+- `project-structure.md`: repository layout, package boundaries, and dependency
   direction.
 - `mcp-tools.md`: detailed MCP tool contracts once implementation starts.
 - `storage.md`: backend schemas, adapter boundaries, and migration notes.
@@ -328,9 +328,8 @@ default. Gate expensive or external-state tests explicitly.
 
 - Update `specification.md` when scope, supported RAG methods, tool surface, or
   data model changes.
-- Update `architecture.md` when package responsibilities or dependency
+- Update `project-structure.md` when package responsibilities or dependency
   direction changes.
 - Update `mcp-tools.md` when MCP tool schemas or semantics become concrete.
 - Update `storage.md` when backend schemas, adapters, or migration strategy
   become concrete.
-

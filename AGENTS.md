@@ -24,11 +24,11 @@ The project targets these RAG methods as first-class concerns:
 - Agentic RAG controlled by Codex SDK
 - Later: Multimodal RAG
 
-Use `docs/specification.md` as the source of truth for architecture and scope.
-Update it when implementation decisions change the architecture, tool surface,
+Use `docs/specification.md` as the source of truth for project scope.
+Update it when implementation decisions change the system shape, tool surface,
 storage model, or supported RAG methods.
 
-## Architecture Rules
+## Boundary Rules
 
 - Codex is not inside MCP. Codex is the agent/MCP client that calls this
   project's Python MCP server.
@@ -110,9 +110,8 @@ requires external state, report the exact command and the reason.
 
 - Keep changes scoped to the requested task.
 - Do not rewrite existing specifications casually. Update docs deliberately when
-  behavior or architecture changes.
+  behavior, project structure, or system shape changes.
 - Commit generated lockfile changes when dependencies change.
 - Avoid committing local caches, virtual environments, model weights, database
   files, or build outputs.
 - Use concise commit messages that describe the durable project change.
-
