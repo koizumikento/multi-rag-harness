@@ -109,7 +109,7 @@ graph, memory, and storage services through internal interfaces.
 
 ### `multi_rag_harness.codex`
 
-Codex SDK orchestration.
+Codex SDK orchestration for non-interactive jobs.
 
 Owns:
 
@@ -120,10 +120,10 @@ Owns:
 - extraction prompt versions
 - structured extraction result handling before validation
 
-Codex SDK is the agentic controller. It owns query decomposition, extraction,
-graph update planning, traversal planning, sufficiency judgment, and final
-synthesis. The Python code should orchestrate those jobs and validate their
-outputs.
+Codex is the agentic controller when it calls this project's MCP tools. The
+`codex` package is for Python-managed Codex SDK jobs such as graph extraction,
+graph update planning, curation, and eval flows. The Python code should
+orchestrate those jobs and validate their outputs.
 
 ### `multi_rag_harness.retrieval`
 

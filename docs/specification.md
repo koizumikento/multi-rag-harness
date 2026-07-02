@@ -2,11 +2,14 @@
 
 ## Purpose
 
-`multi-rag-harness` is a local-first retrieval and memory substrate for agentic
-workflows. The primary agent controller is Codex via the Codex SDK. The harness
-exposes retrieval and graph operations through a Python MCP server, while Codex
-performs the agentic parts: query planning, graph extraction, relation
-normalization, traversal planning, sufficiency checks, and final synthesis.
+`multi-rag-harness` is a local-first retrieval and memory substrate for Codex
+agents. It exposes retrieval, memory, graph, reranking, and source-grounding
+operations through a Python MCP server.
+
+The MCP server does not implement Agentic RAG by itself. Agentic RAG behavior
+lives outside the MCP server, in Codex/Codex SDK. Codex decides which retrieval
+tools to call, whether the returned context is sufficient, and how to synthesize
+or act on the returned context.
 
 This is not a single "document QA RAG" server. It targets multiple RAG patterns
 that work together:
@@ -25,7 +28,7 @@ that work together:
 - Code RAG
 - Tool RAG
 - Memory RAG
-- Agentic RAG, controlled by Codex SDK
+- Agentic RAG, enabled by Codex using this MCP tool surface
 - Later: Multimodal RAG
 
 ## Non-goals
@@ -41,53 +44,53 @@ that work together:
 
 ```text
 Python application / orchestrator
-  ├─ Codex SDK
-  │   ├─ graph extraction
-  │   ├─ entity canonicalization
-  │   ├─ relation and claim extraction
-  │   ├─ query decomposition
-  │   ├─ graph traversal planning
-  │   ├─ retrieval sufficiency judgment
-  │   └─ final synthesis or implementation planning
-  │
-  └─ Python MCP server
-      ├─ rag_search
-      ├─ rag_get_source
-      ├─ graph_search_entities
-      ├─ graph_expand
-      ├─ trace_search
-      ├─ decision_search
-      ├─ error_search
-      ├─ tool_search
-      └─ memory_store
-          ↓
-      Local retrieval and storage layer
-      ├─ keyword index
-      ├─ vector index
-      ├─ reranker
-      ├─ graph store
-      ├─ provenance store
-      ├─ trace store
-      └─ decision/error/code/tool memory
+Codex App / Codex Agent
+  └─ calls MCP tools
+      ↓
+Python MCP server
+  ├─ rag_search
+  ├─ rag_get_source
+  ├─ graph_search_entities
+  ├─ graph_expand
+  ├─ trace_search
+  ├─ decision_search
+  ├─ error_search
+  ├─ tool_search
+  └─ memory_store
+      ↓
+Local retrieval and storage layer
+  ├─ keyword index
+  ├─ vector index
+  ├─ reranker
+  ├─ graph store
+  ├─ provenance store
+  ├─ trace store
+  └─ decision/error/code/tool memory
 ```
 
 ## Role Boundaries
 
-### Codex SDK
+### Codex / Codex SDK
 
-Codex SDK is the agentic controller and graph intelligence layer.
+Codex is the agentic controller when it uses this MCP tool surface. Codex SDK is
+used only when this project needs Python-managed, non-interactive Codex jobs,
+such as graph extraction or graph curation.
 
-Responsibilities:
+Interactive Codex responsibilities:
 
-- Extract entities, relations, claims, aliases, and temporal facts.
-- Normalize and canonicalize graph updates.
-- Propose graph update plans.
 - Decompose user queries into retrieval steps.
 - Decide whether to search keyword/vector/graph/trace/decision/error/code/tool
   memory.
 - Judge whether retrieved context is sufficient.
 - Request more retrieval through MCP when context is weak.
 - Produce final answers, implementation plans, or code changes.
+
+Python-managed Codex SDK job responsibilities:
+
+- Extract entities, relations, claims, aliases, and temporal facts.
+- Normalize and canonicalize graph updates.
+- Propose graph update plans.
+- Support graph curation and evaluation workflows.
 
 ### Python MCP Server
 
@@ -395,7 +398,8 @@ decision, failure, tool, code, and graph memory under one retrieval contract.
 
 ### Agentic RAG
 
-Agentic RAG is implemented by Codex SDK.
+Agentic RAG is not implemented inside the Python MCP server. It is enabled by
+Codex using this MCP tool surface.
 
 Codex controls:
 
@@ -408,7 +412,8 @@ Codex controls:
   `decision_search`, `error_search`, or `tool_search`
 - Final context sufficiency judgment
 
-The Python server provides tools; Codex decides how to use them.
+The Python MCP server provides deterministic retrieval, memory, graph, rerank,
+and source lookup tools; Codex decides how to use them.
 
 ### Multimodal RAG
 
@@ -697,7 +702,8 @@ Local by default:
 - Graph search
 - Metadata filtering
 
-Codex SDK is intentionally used for agentic reasoning and graph extraction.
+Codex is intentionally used for agentic reasoning. Codex SDK is used for
+non-interactive Codex-driven jobs such as graph extraction and curation.
 
 ## Configuration Sketch
 

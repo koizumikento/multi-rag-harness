@@ -2,8 +2,9 @@
 
 ## Project Purpose
 
-`multi-rag-harness` is a Python-based, local-first multi-RAG harness for
-Codex-driven agentic retrieval. It is not a single document-QA RAG server.
+`multi-rag-harness` is a Python-based, local-first retrieval and memory
+substrate for Codex agents. It is not a single document-QA RAG server, and it
+does not implement Agentic RAG inside the MCP server.
 
 The project targets these RAG methods as first-class concerns:
 
@@ -21,7 +22,7 @@ The project targets these RAG methods as first-class concerns:
 - Code RAG
 - Tool RAG
 - Memory RAG
-- Agentic RAG controlled by Codex SDK
+- Agentic RAG enabled by Codex using this MCP tool surface
 - Later: Multimodal RAG
 
 Use `docs/specification.md` as the source of truth for project scope.
@@ -32,8 +33,10 @@ storage model, or supported RAG methods.
 
 - Codex is not inside MCP. Codex is the agent/MCP client that calls this
   project's Python MCP server.
-- Codex SDK owns agentic behavior: query decomposition, graph extraction,
-  canonicalization, traversal planning, sufficiency checks, and final synthesis.
+- Agentic RAG behavior lives outside the MCP server, in Codex/Codex SDK.
+  Codex owns query decomposition, traversal planning, sufficiency checks, and
+  final synthesis.
+- Codex SDK may also run non-interactive graph extraction and curation jobs.
 - The Python MCP server owns stable tool contracts, persistence, search,
   graph traversal, reranking execution, validation, and compact source-grounded
   responses.
