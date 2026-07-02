@@ -7,10 +7,8 @@ SDK stays isolated to this module.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-if TYPE_CHECKING:
-    from openai_codex import AsyncCodex
+from importlib import import_module
+from typing import Any, Protocol, runtime_checkable
 
 
 class CodexRunError(RuntimeError):
@@ -35,18 +33,19 @@ class CodexSdkClient:
 
     def __init__(self, model: str | None = None) -> None:
         self._model = model
-        self._codex: AsyncCodex | None = None
+        self._codex: Any | None = None
 
-    async def _client(self) -> AsyncCodex:
+    async def _client(self) -> Any:
         if self._codex is None:
             try:
-                from openai_codex import AsyncCodex
+                codex_module = import_module("openai_codex")
             except ModuleNotFoundError as exc:
                 raise CodexRunError(
                     "Codex SDK extraction requires the optional 'codex' extra. "
                     "Install it with: uv sync --extra codex"
                 ) from exc
 
+            AsyncCodex = codex_module.AsyncCodex
             codex = AsyncCodex()
             await codex.__aenter__()
             self._codex = codex
