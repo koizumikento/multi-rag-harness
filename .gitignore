@@ -19,3 +19,4 @@ htmlcov/
 *.log
 /models/
 /data/
+.multi-rag-harness/

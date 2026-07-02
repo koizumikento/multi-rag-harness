@@ -795,6 +795,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
+    { name = "anyio" },
     { name = "kuzu" },
     { name = "mcp" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -822,6 +823,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "anyio", specifier = ">=4.14.1" },
     { name = "kuzu", specifier = ">=0.11.3" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "numpy", specifier = ">=2.4.6" },
