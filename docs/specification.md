@@ -48,15 +48,12 @@ Codex App / Codex Agent
   └─ calls MCP tools
       ↓
 Python MCP server
-  ├─ rag_search
-  ├─ rag_get_source
-  ├─ graph_search_entities
-  ├─ graph_expand
-  ├─ trace_search
-  ├─ decision_search
-  ├─ error_search
-  ├─ tool_search
-  └─ memory_store
+  ├─ rag_ingest_path / rag_search / rag_get_source
+  ├─ graph_search_entities / graph_search_claims
+  ├─ graph_expand / graph_get_sources
+  ├─ trace_search / decision_search / error_search
+  ├─ code_search / tool_search
+  └─ memory_store_trace / memory_store_decision / memory_store_failure
       ↓
 Local retrieval and storage layer
   ├─ keyword index
@@ -109,12 +106,16 @@ Responsibilities:
 
 The storage layer owns persistence and indexing.
 
-Initial backend direction:
+Implemented default (fully local, server-free):
 
-- Document/chunk/provenance/trace/decision metadata: Postgres or SQLite.
-- Vector search: pgvector, Qdrant, sqlite-vec, or another swappable backend.
-- Graph store: Kuzu, Neo4j, or a relational graph schema.
-- Keyword search: Postgres full-text search or SQLite FTS5.
+- Document/chunk/provenance/trace/decision metadata: SQLite.
+- Keyword search: SQLite FTS5 (same database file).
+- Vector search: Qdrant embedded local mode.
+- Graph store: Kuzu.
+
+Postgres and pgvector are selectable behind the same interfaces but are
+unimplemented placeholders. See [storage.md](storage.md) for schemas and
+adapter boundaries.
 
 The MCP tool contract should not expose the chosen backend directly.
 
@@ -196,9 +197,12 @@ Local reranker candidates:
 Rerank should be configurable per tool call:
 
 ```text
-rerank: true | false
-rerank_top_n: integer
+rerank: true | false   # omitted -> [reranker].enabled_default
+top_k: integer         # results returned after reranking
 ```
+
+The rerank candidate pool is capped by the `[reranker].max_candidates`
+configuration value, not per call.
 
 ### Metadata-filtered RAG
 
@@ -232,6 +236,12 @@ Common `kind` values:
 - `relation`
 - `claim`
 - `community`
+
+`doc`, `trace`, `decision`, `error`, `code`, and `tool` are chunk-backed kinds
+served by `rag_search` and the kind-scoped `*_search` tools. `entity`,
+`relation`, `claim`, and `community` are graph item kinds served by the
+`graph_*` tools; `rag_search` does not return them directly (except via its
+`graph_expand` enrichment).
 
 ### Source-grounded RAG
 
@@ -276,8 +286,16 @@ Core graph operations:
 - Relation search
 - Neighborhood expansion
 - Path finding, later
-- Community retrieval
+- Community retrieval (Python service only; no MCP tool yet)
 - Source lookup for graph items
+
+Entities and claims are text-searchable: they are indexed into a dedicated
+keyword index and into the shared vector collection (distinguished by
+`item_kind`), so `graph_search_entities` and `graph_search_claims` run the
+same hybrid keyword + vector + RRF pipeline as document search.
+
+Community detection is not implemented yet; the community layer only stores
+and retrieves externally provided communities and summaries.
 
 Graph extraction is performed by Codex SDK, not by local heuristic-only logic.
 The Python layer validates and persists the extracted structures.
@@ -290,7 +308,6 @@ Required temporal fields where applicable:
 
 - `created_at`
 - `updated_at`
-- `observed_at`
 - `valid_from`
 - `valid_to`
 - `supersedes`
@@ -330,16 +347,22 @@ Decision record fields:
 - Context
 - Chosen option
 - Rationale
-- Alternatives considered
-- Rejected options
+- Alternatives considered (including rejected options)
 - Consequences
 - Source links
 - Related entities
 - Supersedes/superseded_by
 
+Storing a decision with `supersedes` marks the old decision superseded and
+expires its search chunks, so temporal filtering hides it from default
+searches.
+
 ### Failure/Error RAG
 
-Failure RAG stores error signatures and resolution history.
+Failure RAG stores error signatures and resolution history. Records are
+written via `memory_store_failure` and retrieved via `error_search`
+(chunk kind `error`); "failure" names the record, "error" names the search
+surface.
 
 Failure record fields:
 
@@ -391,10 +414,19 @@ Tool records:
 
 This is important when the number of available MCP tools grows.
 
+Tool records are written through the Python API (`ToolMemoryService.store`,
+upserting on server + tool name); the MCP surface exposes only `tool_search`.
+A CLI registration command may be added later.
+
 ### Memory RAG
 
-Memory RAG is the long-term project memory layer. It should unify trace,
-decision, failure, tool, code, and graph memory under one retrieval contract.
+Memory RAG is the long-term project memory layer. It unifies trace, decision,
+failure, tool, code, and graph memory under one retrieval contract: every
+memory record is persisted twice — as a typed table row (authoritative) and
+as a rendered markdown document indexed through the same chunk/keyword/vector
+pipeline as ordinary documents (`source_type = "memory"`,
+`source_uri = "memory://{kind}/{record_id}"`). The kind-scoped `*_search`
+tools are `rag_search` constrained to a single `kind`.
 
 ### Agentic RAG
 
@@ -433,7 +465,7 @@ Potential parser:
 
 ## MCP Tool Surface
 
-Initial tool surface:
+The tool surface is fixed at these 15 tools:
 
 ```text
 rag_ingest_path(path, scope, tags, options)
@@ -456,9 +488,23 @@ memory_store_decision(payload)
 memory_store_failure(payload)
 ```
 
+Semantics that follow from the result shape:
+
+- Search results carry `id` (chunk or graph item id) and `source_id`
+  (document id). `rag_get_source` accepts either: a chunk id returns that
+  chunk with `around` neighboring chunks; a document id returns the head of
+  the document.
+- `graph_expand=true` on `rag_search` appends up to 5 graph entities linked
+  (via provenance) to the returned chunks, as `kind="entity"` results at the
+  tail.
+- The kind-scoped searches (`trace/decision/error/code/tool_search`) are
+  `rag_search` constrained to one chunk kind.
+
 Tool outputs must be compact. Each search result should include enough context
 for the agent to decide whether to fetch more via `rag_get_source` or
 `graph_get_sources`.
+
+Full parameter and response contracts live in [mcp-tools.md](mcp-tools.md).
 
 ## Data Model
 
@@ -467,13 +513,19 @@ for the agent to decide whether to fetch more via `rag_get_source` or
 ```text
 documents
   id
-  source_type
+  source_type          -- file | memory | graph
   source_uri
   title
   content_hash
+  scope
+  kind
+  repo
+  language
+  tags
   metadata
   created_at
   updated_at
+  -- unique (source_uri, scope)
 ```
 
 ### Chunks
@@ -486,8 +538,18 @@ chunks
   heading_path
   text
   token_count
+  -- denormalized filter columns copied from the document:
+  scope
+  kind
+  repo
+  path
+  language
+  tags
+  source_type
+  valid_from
+  valid_to
   metadata
-  embedding_id
+  embedding_id         -- vector index point id
   created_at
   updated_at
 ```
@@ -512,6 +574,7 @@ entity_aliases
   id
   entity_id
   alias
+  normalized_alias     -- NFKC + casefold + collapsed whitespace; lookup key
   source_id
   confidence
 ```
@@ -529,6 +592,7 @@ relations
   valid_from
   valid_to
   metadata
+  created_at
 ```
 
 ### Claims
@@ -545,6 +609,19 @@ claims
   valid_from
   valid_to
   metadata
+  created_at
+```
+
+### Communities
+
+```text
+communities
+  id
+  title
+  summary
+  level
+  created_at
+  -- plus entity membership edges in the graph store
 ```
 
 ### Provenance
@@ -591,7 +668,10 @@ traces
   errors
   tests
   final_response
-  metadata
+  human_feedback
+  linked_decisions
+  linked_entities
+  metadata             -- carries prompt/request summary when provided
   created_at
 ```
 
@@ -607,11 +687,52 @@ decisions
   rationale
   alternatives
   consequences
+  source_links
+  related_entities
   supersedes
   superseded_by
   metadata
   created_at
   updated_at
+```
+
+### Failures
+
+```text
+failures
+  id
+  error_text
+  error_category
+  command
+  environment
+  suspected_cause
+  confirmed_cause
+  fix_applied
+  verification
+  related_traces
+  related_code_paths
+  metadata
+  created_at
+```
+
+### Tool Records
+
+```text
+tool_entries
+  id
+  server
+  name
+  description
+  input_schema
+  output_shape
+  approval_policy
+  rate_limits
+  examples
+  known_failure_modes
+  metadata
+  created_at
+  updated_at
+  -- unique (server, name); upserted
 ```
 
 ## Graph Extraction with Codex SDK
@@ -672,6 +793,13 @@ Codex extraction
 → persistence
 ```
 
+Dispatch timing: ingestion queues per-chunk extraction runs
+(`status = "pending"`) only when requested (`options.extract` on
+`rag_ingest_path`, or `codex.auto_extract_on_ingest`, default off; queued only
+for kinds in `codex.extract_kinds`, default `["doc"]`). Pending runs are
+drained by the `extract` CLI command or an explicit orchestrator call — Codex
+SDK is never invoked inside an MCP tool call.
+
 ## Retrieval Flow
 
 Default retrieval flow:
@@ -707,30 +835,53 @@ non-interactive Codex-driven jobs such as graph extraction and curation.
 
 ## Configuration Sketch
 
+Defaults are the fully local configuration. TOML file
+(`./multi-rag-harness.toml`, `--config`, or `$MRH_CONFIG_FILE`) with
+`MRH_`-prefixed environment variable overrides (`__` for nesting).
+
 ```toml
+data_dir = "./.multi-rag-harness"
+
 [embedding]
 model = "intfloat/multilingual-e5-base"
 device = "auto"
+dimension = 768
 
 [reranker]
 model = "hotchpotch/japanese-reranker-cross-encoder-small-v1"
 enabled_default = true
+max_candidates = 50
 
 [storage]
-metadata_backend = "postgres"
-vector_backend = "pgvector"
+metadata_backend = "sqlite"    # "postgres" selectable, not implemented
+vector_backend = "qdrant"      # embedded local mode; "pgvector" not implemented
 graph_backend = "kuzu"
 
 [mcp]
 server_name = "multi-rag-harness"
+
+[codex]
+prompt_version = "extraction/v1"
+auto_extract_on_ingest = false
+extract_kinds = ["doc"]
+max_runs_per_batch = 25
 ```
+
+## Resolved Design Decisions
+
+- Graph backend: Kuzu (entities, relations, community membership); claims,
+  aliases, and provenance stay in the metadata store.
+- Vector storage: Qdrant embedded local mode (server-free); pgvector remains a
+  selectable placeholder.
+- Reranking: enabled by default for all searches
+  (`[reranker].enabled_default = true`), overridable per tool call.
+- Codex extraction batching: pending runs queued at ingest (opt-in), drained
+  in batches (`codex.max_runs_per_batch`) by the `extract` CLI command.
 
 ## Open Design Questions
 
-- Should the first graph backend be Kuzu, Neo4j, or Postgres tables?
-- Should vector storage start with pgvector, Qdrant, or sqlite-vec?
-- Should reranking be enabled by default for all searches or only for complex
-  searches?
-- How should Codex extraction jobs be batched and cached?
+- How should Codex extraction results be cached across re-runs of unchanged
+  chunks?
 - How should source spans be represented for non-text sources later?
 - What is the first benchmark set for retrieval quality?
+- When should community detection be implemented, and with which algorithm?
