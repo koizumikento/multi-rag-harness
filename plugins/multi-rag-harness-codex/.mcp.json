@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "multi-rag-harness": {
+      "title": "Multi RAG Harness",
+      "description": "Local-first retrieval and durable memory substrate for Codex.",
+      "cwd": "/Users/koizumi/workspace/multi-rag-harness",
+      "command": "uv",
+      "args": [
+        "run",
+        "multi-rag-harness",
+        "serve"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 300
+    }
+  }
+}

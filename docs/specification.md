@@ -53,7 +53,7 @@ Python MCP server
   ├─ graph_expand / graph_get_sources
   ├─ trace_search / decision_search / error_search
   ├─ code_search / tool_search
-  └─ memory_store_trace / memory_store_decision / memory_store_failure
+  └─ memory_store_trace / memory_store_decision / memory_store_failure / memory_store_tool
       ↓
 Local retrieval and storage layer
   ├─ keyword index
@@ -414,9 +414,9 @@ Tool records:
 
 This is important when the number of available MCP tools grows.
 
-Tool records are written through the Python API (`ToolMemoryService.store`,
-upserting on server + tool name); the MCP surface exposes only `tool_search`.
-A CLI registration command may be added later.
+Tool records are written through `memory_store_tool` or the Python API
+(`ToolMemoryService.store`, upserting on server + tool name), and retrieved
+through `tool_search`. A CLI registration command may be added later.
 
 ### Memory RAG
 
@@ -465,7 +465,7 @@ Potential parser:
 
 ## MCP Tool Surface
 
-The tool surface is fixed at these 15 tools:
+The tool surface is fixed at these 16 tools:
 
 ```text
 rag_ingest_path(path, scope, tags, options)
@@ -486,6 +486,7 @@ tool_search(query, filters, top_k, rerank)
 memory_store_trace(payload)
 memory_store_decision(payload)
 memory_store_failure(payload)
+memory_store_tool(payload)
 ```
 
 Semantics that follow from the result shape:

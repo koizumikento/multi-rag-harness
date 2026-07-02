@@ -23,7 +23,7 @@ flowchart LR
         MEMORY["trace_search / decision_search / error_search"]
         CODE["code_search"]
         TOOL["tool_search"]
-        STORE["memory_store_trace / memory_store_decision / memory_store_failure"]
+        STORE["memory_store_trace / memory_store_decision / memory_store_failure / memory_store_tool"]
     end
 
     MCP --> RAG
@@ -132,6 +132,7 @@ tool_search(query, filters, top_k, rerank)
 memory_store_trace(payload)
 memory_store_decision(payload)
 memory_store_failure(payload)
+memory_store_tool(payload)
 ```
 
 ## Non-interactive Jobs
@@ -219,11 +220,12 @@ Both are accepted by `rag_get_source`. Search responses wrap results as
 - `memory_store_failure(payload)` — error_text, error_category?, command?,
   environment?, suspected_cause?, confirmed_cause?, fix_applied?,
   verification?, related_traces, related_code_paths, scope, tags, metadata.
+- `memory_store_tool(payload)` — server, name, description, input_schema,
+  output_shape?, approval_policy?, rate_limits?, examples,
+  known_failure_modes, scope, tags, metadata. Upserts on server + tool name.
 
-All three return `{record_id, document_id}`: the typed record id and the
-searchable memory document id. Tool records (for `tool_search`) are written
-via the Python API (`ToolMemoryService.store`), not an MCP tool — the spec
-surface is fixed at these 15 tools.
+All four return `{record_id, document_id}`: the typed record id and the
+searchable memory document id.
 
 ### Extraction runs
 

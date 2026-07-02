@@ -33,6 +33,7 @@ EXPECTED_TOOLS = {
     "memory_store_trace",
     "memory_store_decision",
     "memory_store_failure",
+    "memory_store_tool",
 }
 
 
@@ -234,21 +235,28 @@ async def test_codex_model_setting_reaches_sdk_client(settings: Settings) -> Non
         await close_container(built)
 
 
-async def test_tool_search_over_stored_tool_records(server, container: AppContainer) -> None:
-    from multi_rag_harness.memory.tools import ToolRecordPayload
-
-    await container.tools_memory.store(
-        ToolRecordPayload(
-            server="multi-rag-harness",
-            name="rag_search",
-            description="hybrid retrieval with rerank",
-            input_schema=json.loads('{"type": "object"}'),
-        )
-    )
+async def test_tool_store_and_search_tools(server) -> None:
     async with client_session(server._mcp_server) as client:
+        stored = await client.call_tool(
+            "memory_store_tool",
+            {
+                "payload": {
+                    "server": "multi-rag-harness",
+                    "name": "rag_search",
+                    "description": "hybrid retrieval with rerank",
+                    "input_schema": json.loads('{"type": "object"}'),
+                    "examples": ["rag_search(query='hybrid retrieval', rerank=true)"],
+                    "known_failure_modes": ["empty index returns no results"],
+                }
+            },
+        )
+        assert not stored.isError
+        record_id = sc(stored)["record_id"]
+
         result = await client.call_tool(
             "tool_search", {"query": "hybrid retrieval rerank", "rerank": False}
         )
         assert not result.isError
         results = sc(result)["results"]
         assert results and results[0]["kind"] == "tool"
+        assert any(r["metadata"].get("record_id") == record_id for r in results)

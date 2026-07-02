@@ -60,7 +60,7 @@ class McpSettings(BaseModel):
         "Local-first retrieval and memory substrate. Use rag_search for hybrid "
         "document search, graph_* tools for entity/claim exploration, "
         "trace/decision/error/code/tool_search for typed memory, and "
-        "memory_store_* to persist durable memory."
+        "memory_store_* to persist durable memory and tool records."
     )
 
 

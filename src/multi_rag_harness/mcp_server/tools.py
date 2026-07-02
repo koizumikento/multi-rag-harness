@@ -1,6 +1,6 @@
 """MCP tool implementations: thin handlers delegating to services.
 
-The tool surface is fixed by the specification (15 tools). Handlers pull the
+The tool surface is fixed by the specification (16 tools). Handlers pull the
 service container from the lifespan context and shape responses; no storage
 or retrieval logic lives here.
 """
@@ -26,6 +26,7 @@ from multi_rag_harness.mcp_server.schemas import (
 )
 from multi_rag_harness.memory.decisions import DecisionPayload
 from multi_rag_harness.memory.failures import FailurePayload
+from multi_rag_harness.memory.tools import ToolRecordPayload
 from multi_rag_harness.memory.traces import TracePayload
 from multi_rag_harness.retrieval.results import SearchOutput, SearchResult
 
@@ -294,6 +295,17 @@ def register_tools(mcp: FastMCP) -> None:  # noqa: C901
         ref = await container.failures.store(payload)
         return StoreResponse(record_id=ref.record_id, document_id=ref.document_id)
 
+    @mcp.tool()
+    async def memory_store_tool(
+        payload: ToolRecordPayload,
+        ctx: Context,
+    ) -> StoreResponse:
+        """Store or update an MCP tool description so future tool_search calls
+        can find the right tool and its known usage constraints."""
+        container = _container(ctx)
+        ref = await container.tools_memory.store(payload)
+        return StoreResponse(record_id=ref.record_id, document_id=ref.document_id)
+
     _ = (
         rag_ingest_path,
         rag_search,
@@ -310,4 +322,5 @@ def register_tools(mcp: FastMCP) -> None:  # noqa: C901
         memory_store_trace,
         memory_store_decision,
         memory_store_failure,
+        memory_store_tool,
     )

@@ -1,0 +1,12 @@
+interface:
+  display_name: "Multi RAG Memory"
+  short_description: "Search and persist durable local project memory with multi-rag-harness."
+  default_prompt: "Use multi-rag-harness memory to check prior context and store durable outcomes when appropriate."
+policy:
+  allow_implicit_invocation: true
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "multi-rag-harness"
+      description: "Local multi-rag-harness MCP server"
+      transport: "stdio"

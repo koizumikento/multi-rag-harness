@@ -1,7 +1,7 @@
 """Tool memory: MCP tool descriptions for tool selection support.
 
-Stored via the Python API (or CLI later); the MCP tool surface only exposes
-``tool_search`` per the specification.
+Stored via the Python API or ``memory_store_tool`` MCP tool; searched via
+``tool_search``.
 """
 
 from __future__ import annotations

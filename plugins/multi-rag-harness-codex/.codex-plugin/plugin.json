@@ -1,0 +1,22 @@
+{
+  "name": "multi-rag-harness-codex",
+  "version": "0.1.0",
+  "description": "Codex workflows and MCP configuration for local multi-rag-harness memory.",
+  "author": {
+    "name": "multi-rag-harness maintainers"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Multi RAG Harness",
+    "shortDescription": "Local RAG and durable memory workflows for Codex.",
+    "longDescription": "Adds a local multi-rag-harness MCP server plus a Codex skill for deciding when to search, inspect sources, and persist durable trace, decision, failure, and tool memory.",
+    "developerName": "multi-rag-harness maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "MCP",
+      "Skills"
+    ],
+    "defaultPrompt": "Use multi-rag-harness memory to search prior context and store durable project learning."
+  },
+  "mcpServers": "./.mcp.json"
+}
