@@ -21,6 +21,13 @@ cd multi-rag-harness
 uv sync
 ```
 
+Codex SDK extraction jobs are optional. Install the extra only when you need
+`multi-rag-harness extract`:
+
+```bash
+uv sync --extra codex
+```
+
 ## Usage
 
 The default configuration is fully local (SQLite + FTS5, embedded Qdrant,

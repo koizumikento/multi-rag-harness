@@ -19,6 +19,8 @@ Use this checklist before making the repository public or publishing a package.
 - Confirm plugin metadata does not contain machine-local absolute paths.
 - Confirm examples do not contain real API keys, private paths, or proprietary
   data.
+- Confirm Linux CI installs the default package without optional Codex SDK
+  dependencies.
 
 ## Verification
 

@@ -11,6 +11,8 @@ uv sync
 uv run multi-rag-harness config-show
 ```
 
+Use `uv sync --extra codex` when working on Codex SDK extraction behavior.
+
 Do not install project dependencies with `pip`, Poetry, or ad hoc virtualenv
 commands unless the repository intentionally changes package management.
 

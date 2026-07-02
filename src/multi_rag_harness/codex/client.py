@@ -39,7 +39,13 @@ class CodexSdkClient:
 
     async def _client(self) -> AsyncCodex:
         if self._codex is None:
-            from openai_codex import AsyncCodex
+            try:
+                from openai_codex import AsyncCodex
+            except ModuleNotFoundError as exc:
+                raise CodexRunError(
+                    "Codex SDK extraction requires the optional 'codex' extra. "
+                    "Install it with: uv sync --extra codex"
+                ) from exc
 
             codex = AsyncCodex()
             await codex.__aenter__()

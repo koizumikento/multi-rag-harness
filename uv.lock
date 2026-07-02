@@ -801,7 +801,6 @@ dependencies = [
     { name = "mcp" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "openai-codex" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
@@ -811,6 +810,11 @@ dependencies = [
     { name = "sentence-transformers" },
     { name = "sqlalchemy" },
     { name = "typer" },
+]
+
+[package.optional-dependencies]
+codex = [
+    { name = "openai-codex" },
 ]
 
 [package.dev-dependencies]
@@ -829,7 +833,7 @@ requires-dist = [
     { name = "kuzu", specifier = ">=0.11.3" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "numpy", specifier = ">=2.4.6" },
-    { name = "openai-codex", specifier = ">=0.1.0b2" },
+    { name = "openai-codex", marker = "extra == 'codex'", specifier = ">=0.1.0b2" },
     { name = "pgvector", specifier = ">=0.4.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "pydantic", specifier = ">=2.13.4" },

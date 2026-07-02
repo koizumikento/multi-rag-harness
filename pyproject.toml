@@ -26,7 +26,6 @@ dependencies = [
     "kuzu>=0.11.3",
     "mcp>=1.28.1",
     "numpy>=2.4.6",
-    "openai-codex>=0.1.0b2",
     "pgvector>=0.4.2",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
@@ -40,6 +39,11 @@ dependencies = [
 
 [project.scripts]
 multi-rag-harness = "multi_rag_harness.cli:main"
+
+[project.optional-dependencies]
+codex = [
+    "openai-codex>=0.1.0b2",
+]
 
 [project.urls]
 Documentation = "https://github.com/koizumikento/multi-rag-harness/tree/main/docs"
