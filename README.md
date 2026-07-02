@@ -5,9 +5,21 @@ tool surface for retrieval, memory, graph exploration, reranking, and
 source-grounded context. Agentic RAG behavior lives in Codex, which calls these
 tools.
 
+Status: alpha. The local-first path is implemented for development and
+experimentation; storage schemas and MCP tool contracts may still change before
+the first stable release.
+
 See [docs/specification.md](docs/specification.md) for the design,
 [docs/mcp-tools.md](docs/mcp-tools.md) for the tool contracts, and
 [docs/storage.md](docs/storage.md) for the storage layer.
+
+## Installation
+
+```bash
+git clone https://github.com/koizumikento/multi-rag-harness.git
+cd multi-rag-harness
+uv sync
+```
 
 ## Usage
 
@@ -50,6 +62,25 @@ Keep API keys in env vars, not in the TOML file. Note: vector collections are
 pinned to the embedding dimension — switching embedding models requires
 re-ingesting into a fresh `data_dir`.
 
+## Codex MCP Configuration
+
+For local development, point Codex at the repository checkout:
+
+```json
+{
+  "mcpServers": {
+    "multi-rag-harness": {
+      "command": "uv",
+      "args": ["run", "multi-rag-harness", "serve"],
+      "cwd": "/path/to/multi-rag-harness"
+    }
+  }
+}
+```
+
+The bundled Codex plugin under `plugins/multi-rag-harness-codex/` is intended
+for local installation from this repository.
+
 ## Development
 
 This repository uses `uv` for Python packaging and dependency management.
@@ -64,3 +95,13 @@ uv run ty check
 
 Tests run entirely offline: fake embedding/reranker/Codex clients, tmp-dir
 backends, no model downloads.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, verification commands,
+and project boundary rules. Security reports should follow
+[SECURITY.md](SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

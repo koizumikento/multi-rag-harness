@@ -3,7 +3,7 @@
     "multi-rag-harness": {
       "title": "Multi RAG Harness",
       "description": "Local-first retrieval and durable memory substrate for Codex.",
-      "cwd": "/Users/koizumi/workspace/multi-rag-harness",
+      "cwd": "../..",
       "command": "uv",
       "args": [
         "run",

@@ -1,6 +1,7 @@
 .venv/
 .ruff_cache/
 .pytest_cache/
+.serena/
 .mypy_cache/
 .ty_cache/
 __pycache__/

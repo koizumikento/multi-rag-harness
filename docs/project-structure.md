@@ -11,10 +11,14 @@ For product scope and RAG method coverage, see
 ```text
 multi-rag-harness/
 ├── AGENTS.md
+├── CONTRIBUTING.md
 ├── README.md
+├── SECURITY.md
+├── .github/
 ├── docs/
 │   ├── project-structure.md
 │   ├── mcp-tools.md
+│   ├── oss-release-checklist.md
 │   ├── specification.md
 │   └── storage.md
 ├── pyproject.toml
@@ -49,6 +53,20 @@ expectations.
 
 Short project introduction and development commands. Keep this concise.
 
+### `CONTRIBUTING.md`
+
+Contributor setup, checks, and project-specific implementation rules for OSS
+collaboration.
+
+### `SECURITY.md`
+
+Security reporting policy. Do not put secrets or private reports in public
+issues.
+
+### `.github/`
+
+GitHub automation and repository metadata, including CI workflows.
+
 ### `docs/`
 
 Project design documentation.
@@ -58,6 +76,8 @@ Project design documentation.
 - `project-structure.md`: repository layout, package boundaries, and dependency
   direction.
 - `mcp-tools.md`: detailed MCP tool contracts once implementation starts.
+- `oss-release-checklist.md`: owner decisions and final hygiene checks before
+  publishing the repository or package.
 - `storage.md`: backend schemas, adapter boundaries, and migration notes.
 
 ### `pyproject.toml` and `uv.lock`
