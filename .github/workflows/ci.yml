@@ -38,7 +38,9 @@ jobs:
         run: uv run ty check
 
       - name: Test
-        run: uv run pytest
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report
 
       - name: Build distributions
         run: uv build --sdist --wheel --out-dir /tmp/multi-rag-harness-dist

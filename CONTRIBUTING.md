@@ -43,7 +43,8 @@ uv lock --check
 uv run ruff check
 uv run ruff format --check
 uv run ty check
-uv run pytest
+uv run coverage run -m pytest
+uv run coverage report
 uv build --sdist --wheel --out-dir /tmp/multi-rag-harness-dist
 ```
 

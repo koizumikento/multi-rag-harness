@@ -64,6 +64,17 @@ async def test_openai_compat_embedder_batches() -> None:
     await embedder.close()
 
 
+async def test_openai_compat_embedder_empty_input_and_close_without_client() -> None:
+    embedder = OpenAICompatEmbedder(
+        base_url="https://api.example.com/v1",
+        model="m",
+        dimension=DIM,
+    )
+    assert await embedder.embed_queries([]) == []
+    assert await embedder.embed_passages([]) == []
+    await embedder.close()
+
+
 async def test_openai_compat_embedder_dimension_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0, 2.0]}]})
@@ -121,6 +132,27 @@ async def test_api_reranker_bare_list_response() -> None:
     )
     assert await reranker.score("q", ["only"]) == [0.7]
     assert await reranker.score("q", []) == []
+    await reranker.close()
+
+
+async def test_api_reranker_ignores_out_of_range_results_and_defaults_score() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 9, "relevance_score": 1.0},
+                    {"index": 1},
+                ]
+            },
+        )
+
+    reranker = ApiReranker(
+        base_url="https://api.example.com",
+        model="m",
+        transport=httpx.MockTransport(handler),
+    )
+    assert await reranker.score("q", ["a", "b"]) == [0.0, 0.0]
     await reranker.close()
 
 
