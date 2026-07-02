@@ -9,6 +9,7 @@ requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
     "anyio>=4.14.1",
+    "httpx>=0.28.1",
     "kuzu>=0.11.3",
     "mcp>=1.28.1",
     "numpy>=2.4.6",

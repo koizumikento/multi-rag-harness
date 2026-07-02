@@ -1,8 +1,9 @@
 """Qdrant vector storage adapter.
 
-Uses the embedded local mode (``QdrantClient(path=...)``); no server needed.
-The synchronous client is wrapped in ``anyio.to_thread.run_sync`` so the
-adapter satisfies the async ``VectorIndex`` protocol.
+Embedded local mode (``QdrantClient(path=...)``, no server needed) by
+default; a remote server when ``storage.qdrant_url`` is configured. The
+synchronous client is wrapped in ``anyio.to_thread.run_sync`` so the adapter
+satisfies the async ``VectorIndex`` protocol.
 """
 
 from __future__ import annotations
@@ -17,7 +18,13 @@ import anyio.to_thread
 from qdrant_client import QdrantClient
 from qdrant_client import models as qm
 
-from multi_rag_harness.storage.interfaces import ScoredId, SearchFilters, VectorPoint, utcnow
+from multi_rag_harness.storage.interfaces import (
+    ScoredId,
+    SearchFilters,
+    VectorDimensionMismatchError,
+    VectorPoint,
+    utcnow,
+)
 
 T = TypeVar("T")
 
@@ -122,12 +129,34 @@ def _filters_to_qdrant(
     return qm.Filter(must=must or None, should=should or None)
 
 
-class QdrantVectorIndex:
-    """VectorIndex over embedded Qdrant."""
+def client_kwargs(
+    path: Path | str, url: str | None = None, api_key: str | None = None
+) -> dict[str, Any]:
+    """Constructor kwargs for QdrantClient: remote server when a url is
+    configured, embedded local mode otherwise."""
+    if url:
+        kwargs: dict[str, Any] = {"url": url}
+        if api_key:
+            kwargs["api_key"] = api_key
+        return kwargs
+    return {"path": str(path)}
 
-    def __init__(self, path: Path | str, collection: str) -> None:
+
+class QdrantVectorIndex:
+    """VectorIndex over Qdrant: embedded local mode by default, remote server
+    when a url is configured."""
+
+    def __init__(
+        self,
+        path: Path | str,
+        collection: str,
+        url: str | None = None,
+        api_key: str | None = None,
+    ) -> None:
         self._path = str(path)
         self._collection = collection
+        self._url = url
+        self._api_key = api_key
         self._client: QdrantClient | None = None
 
     async def _run(self, fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -144,24 +173,43 @@ class QdrantVectorIndex:
             return
 
         def _init() -> QdrantClient:
-            client = QdrantClient(path=self._path)
-            if not client.collection_exists(self._collection):
-                client.create_collection(
-                    collection_name=self._collection,
-                    vectors_config=qm.VectorParams(size=dimension, distance=qm.Distance.COSINE),
-                )
-                # Payload indexes are a no-op in embedded local mode; create
-                # them only when talking to a server.
-                if client._client.__class__.__name__ != "QdrantLocal":
-                    for field, schema in _PAYLOAD_INDEXES.items():
-                        client.create_payload_index(
-                            collection_name=self._collection,
-                            field_name=field,
-                            field_schema=schema,
-                        )
+            client = QdrantClient(**client_kwargs(self._path, self._url, self._api_key))
+            try:
+                if not client.collection_exists(self._collection):
+                    client.create_collection(
+                        collection_name=self._collection,
+                        vectors_config=qm.VectorParams(size=dimension, distance=qm.Distance.COSINE),
+                    )
+                    # Payload indexes are a no-op in embedded local mode;
+                    # create them only when talking to a server.
+                    if client._client.__class__.__name__ != "QdrantLocal":
+                        for field, schema in _PAYLOAD_INDEXES.items():
+                            client.create_payload_index(
+                                collection_name=self._collection,
+                                field_name=field,
+                                field_schema=schema,
+                            )
+                else:
+                    self._check_dimension(client, dimension)
+            except BaseException:
+                client.close()
+                raise
             return client
 
         self._client = await anyio.to_thread.run_sync(_init)
+
+    def _check_dimension(self, client: QdrantClient, dimension: int) -> None:
+        """Fail fast when the configured embedding dimension does not match
+        the existing collection (e.g. after switching embedding models)."""
+        info = client.get_collection(self._collection)
+        vectors = info.config.params.vectors
+        existing = vectors.size if isinstance(vectors, qm.VectorParams) else None
+        if existing is not None and existing != dimension:
+            raise VectorDimensionMismatchError(
+                f"vector collection '{self._collection}' stores {existing}-dimensional "
+                f"vectors but embedding.dimension is {dimension}; switching embedding "
+                f"models requires re-ingesting into a fresh data_dir or collection"
+            )
 
     async def close(self) -> None:
         if self._client is not None:

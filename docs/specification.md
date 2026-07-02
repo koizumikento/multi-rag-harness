@@ -830,6 +830,16 @@ Local by default:
 - Graph search
 - Metadata filtering
 
+External connections are opt-in via configuration/environment variables and
+never required for the default path:
+
+- Embeddings: `embedding.provider = "api"` targets an OpenAI-compatible
+  `/embeddings` endpoint (OpenAI, TEI, vLLM, Ollama, ...).
+- Reranking: `reranker.provider = "api"` targets a Cohere/Jina-compatible
+  `/rerank` endpoint.
+- Vector index: `storage.qdrant_url` targets a remote Qdrant server instead
+  of the embedded local mode.
+
 Codex is intentionally used for agentic reasoning. Codex SDK is used for
 non-interactive Codex-driven jobs such as graph extraction and curation.
 
@@ -843,19 +853,27 @@ Defaults are the fully local configuration. TOML file
 data_dir = "./.multi-rag-harness"
 
 [embedding]
+provider = "local"             # "api": OpenAI-compatible /embeddings endpoint
 model = "intfloat/multilingual-e5-base"
 device = "auto"
-dimension = 768
+dimension = 768                # must match the model; collections are pinned to it
+# base_url = "https://api.openai.com/v1"   # provider="api" only
+# api key via MRH_EMBEDDING__API_KEY (do not put secrets in TOML)
 
 [reranker]
+provider = "local"             # "api": Cohere/Jina-compatible /rerank endpoint
 model = "hotchpotch/japanese-reranker-cross-encoder-small-v1"
 enabled_default = true
 max_candidates = 50
+# base_url = "https://api.jina.ai/v1"      # provider="api" only
+# api key via MRH_RERANKER__API_KEY
 
 [storage]
 metadata_backend = "sqlite"    # "postgres" selectable, not implemented
 vector_backend = "qdrant"      # embedded local mode; "pgvector" not implemented
 graph_backend = "kuzu"
+# qdrant_url = "https://qdrant.example.com:6333"  # unset -> embedded local mode
+# api key via MRH_STORAGE__QDRANT_API_KEY
 
 [mcp]
 server_name = "multi-rag-harness"
@@ -865,7 +883,12 @@ prompt_version = "extraction/v1"
 auto_extract_on_ingest = false
 extract_kinds = ["doc"]
 max_runs_per_batch = 25
+# model = "gpt-5-codex"        # optional Codex model override
 ```
+
+Changing the embedding model or dimension against an existing `data_dir` is
+rejected at startup (`VectorDimensionMismatchError`); re-ingest into a fresh
+data dir or collection instead.
 
 ## Resolved Design Decisions
 

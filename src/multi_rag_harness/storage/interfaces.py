@@ -15,6 +15,11 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 
+class VectorDimensionMismatchError(RuntimeError):
+    """The configured embedding dimension conflicts with an existing vector
+    collection; the stored vectors were produced by a different model."""
+
+
 def new_id() -> str:
     return str(uuid.uuid4())
 

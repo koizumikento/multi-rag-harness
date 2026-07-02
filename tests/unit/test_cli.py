@@ -19,6 +19,24 @@ def test_config_show(monkeypatch, tmp_path: Path) -> None:
     assert "embedding.model" in result.output
 
 
+def test_config_show_redacts_api_keys(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("MRH_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MRH_EMBEDDING__API_KEY", "sk-embed")
+    monkeypatch.setenv("MRH_RERANKER__API_KEY", "rerank-secret")
+    monkeypatch.setenv("MRH_STORAGE__QDRANT_API_KEY", "qdrant-secret")
+
+    result = runner.invoke(app, ["config-show"])
+
+    assert result.exit_code == 0
+    assert "embedding.api_key" in result.output
+    assert "reranker.api_key" in result.output
+    assert "storage.qdrant_api_key" in result.output
+    assert "***" in result.output
+    assert "sk-embed" not in result.output
+    assert "rerank-secret" not in result.output
+    assert "qdrant-secret" not in result.output
+
+
 def test_config_show_with_toml(tmp_path: Path) -> None:
     config_file = tmp_path / "mrh.toml"
     config_file.write_text('[mcp]\nserver_name = "from-toml-server"\n', encoding="utf-8")

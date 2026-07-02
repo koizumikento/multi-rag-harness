@@ -62,7 +62,7 @@ async def build_container(
     storage = build_storage(settings)
     embedder = embedder or create_embedder(settings)
     reranker = reranker or create_reranker(settings)
-    codex_client = codex_client or CodexSdkClient()
+    codex_client = codex_client or CodexSdkClient(model=settings.codex.model)
 
     await storage.metadata.initialize()
     await storage.vector.initialize(embedder.dimension)
@@ -111,6 +111,11 @@ async def build_container(
 async def close_container(container: AppContainer) -> None:
     if isinstance(container.codex_client, CodexSdkClient):
         await container.codex_client.close()
+    # API-backed model adapters hold HTTP clients; local ones have no close.
+    for model in (container.embedder, container.reranker):
+        closer = getattr(model, "close", None)
+        if callable(closer):
+            await closer()
     await container.storage.metadata.close()
     await container.storage.vector.close()
     await container.storage.graph.close()

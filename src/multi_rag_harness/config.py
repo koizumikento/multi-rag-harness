@@ -19,17 +19,27 @@ CONFIG_FILE_ENV_VAR = "MRH_CONFIG_FILE"
 
 
 class EmbeddingSettings(BaseModel):
+    provider: Literal["local", "api"] = "local"
     model: str = "intfloat/multilingual-e5-base"
     device: str = "auto"
     dimension: int = 768
     batch_size: int = 32
+    # provider="api": OpenAI-compatible /embeddings endpoint (OpenAI, TEI,
+    # vLLM, Ollama, ...). Set the key via MRH_EMBEDDING__API_KEY, not TOML.
+    base_url: str | None = None
+    api_key: str | None = None
 
 
 class RerankerSettings(BaseModel):
+    provider: Literal["local", "api"] = "local"
     model: str = "hotchpotch/japanese-reranker-cross-encoder-small-v1"
     enabled_default: bool = True
     device: str = "auto"
     max_candidates: int = 50
+    # provider="api": Cohere/Jina-compatible /rerank endpoint. Set the key
+    # via MRH_RERANKER__API_KEY, not TOML.
+    base_url: str | None = None
+    api_key: str | None = None
 
 
 class StorageSettings(BaseModel):
@@ -38,6 +48,10 @@ class StorageSettings(BaseModel):
     graph_backend: Literal["kuzu"] = "kuzu"
     postgres_dsn: str | None = None
     qdrant_collection: str = "mrh_vectors"
+    # Remote Qdrant server; unset means embedded local mode under data_dir.
+    # Set the key via MRH_STORAGE__QDRANT_API_KEY, not TOML.
+    qdrant_url: str | None = None
+    qdrant_api_key: str | None = None
 
 
 class McpSettings(BaseModel):
@@ -55,6 +69,7 @@ class CodexSettings(BaseModel):
     auto_extract_on_ingest: bool = False
     extract_kinds: list[str] = Field(default_factory=lambda: ["doc"])
     max_runs_per_batch: int = 25
+    model: str | None = None  # Codex model override for extraction threads
 
 
 class Settings(BaseSettings):

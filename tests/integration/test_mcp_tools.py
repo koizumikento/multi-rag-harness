@@ -220,6 +220,20 @@ async def test_graph_tools_flow(server, container: AppContainer, corpus: Path) -
         assert "entity" in kinds
 
 
+async def test_codex_model_setting_reaches_sdk_client(settings: Settings) -> None:
+    from multi_rag_harness.codex.client import CodexSdkClient
+
+    settings.codex.model = "gpt-5-codex"
+    built = await build_container(
+        settings, embedder=FakeEmbedder(FAKE_DIMENSION), reranker=FakeReranker()
+    )
+    try:
+        assert isinstance(built.codex_client, CodexSdkClient)
+        assert built.codex_client._model == "gpt-5-codex"
+    finally:
+        await close_container(built)
+
+
 async def test_tool_search_over_stored_tool_records(server, container: AppContainer) -> None:
     from multi_rag_harness.memory.tools import ToolRecordPayload
 

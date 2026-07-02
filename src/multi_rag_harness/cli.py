@@ -22,6 +22,12 @@ console = Console()
 ConfigOption = Annotated[Path | None, typer.Option("--config", help="Path to a TOML config file.")]
 
 
+def _display_config_value(key: str, value: object) -> str:
+    if value and (key == "api_key" or key.endswith("_api_key")):
+        return "***"
+    return str(value)
+
+
 @app.command()
 def serve(config: ConfigOption = None) -> None:
     """Run the MCP server over stdio."""
@@ -107,7 +113,7 @@ def config_show(config: ConfigOption = None) -> None:
     for section_name in ("embedding", "reranker", "storage", "mcp", "codex"):
         section = getattr(settings, section_name)
         for key, value in section.model_dump().items():
-            table.add_row(f"{section_name}.{key}", str(value))
+            table.add_row(f"{section_name}.{key}", _display_config_value(key, value))
     console.print(table)
 
 

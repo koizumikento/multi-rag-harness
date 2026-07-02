@@ -47,7 +47,12 @@ def build_storage(settings: Settings) -> StorageBundle:
 
     vector: VectorIndex
     if settings.storage.vector_backend == "qdrant":
-        vector = QdrantVectorIndex(settings.qdrant_path, settings.storage.qdrant_collection)
+        vector = QdrantVectorIndex(
+            settings.qdrant_path,
+            settings.storage.qdrant_collection,
+            url=settings.storage.qdrant_url,
+            api_key=settings.storage.qdrant_api_key,
+        )
     else:
         vector = cast(VectorIndex, PgvectorIndex(settings.storage.postgres_dsn))
 

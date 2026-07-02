@@ -76,10 +76,17 @@ double-quoted (neutralizing FTS5 operators), and tokens are OR-joined
 
 ## Qdrant (Vector Index)
 
-Embedded local mode: `QdrantClient(path=data_dir/qdrant)`. One collection
-(default `mrh_vectors`, cosine distance, size = embedding dimension) holds
-chunks and graph items, separated by the `item_kind` payload field
-(`chunk` | `entity` | `claim`).
+Embedded local mode by default (`QdrantClient(path=data_dir/qdrant)`);
+setting `storage.qdrant_url` (env `MRH_STORAGE__QDRANT_URL`, key via
+`MRH_STORAGE__QDRANT_API_KEY`) switches to a remote Qdrant server. One
+collection (default `mrh_vectors`, cosine distance, size = embedding
+dimension) holds chunks and graph items, separated by the `item_kind` payload
+field (`chunk` | `entity` | `claim`).
+
+On startup the adapter validates the configured `embedding.dimension` against
+an existing collection and raises `VectorDimensionMismatchError` on conflict:
+switching embedding models requires re-ingesting into a fresh data_dir or
+collection — there is no vector migration.
 
 Point payload:
 

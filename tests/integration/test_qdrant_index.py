@@ -6,8 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from multi_rag_harness.storage.interfaces import SearchFilters, VectorPoint
-from multi_rag_harness.storage.qdrant import QdrantVectorIndex, build_point_payload
+from multi_rag_harness.storage.interfaces import (
+    SearchFilters,
+    VectorDimensionMismatchError,
+    VectorPoint,
+)
+from multi_rag_harness.storage.qdrant import (
+    QdrantVectorIndex,
+    build_point_payload,
+    client_kwargs,
+)
 
 DIM = 8
 
@@ -104,3 +112,29 @@ async def test_delete(index: QdrantVectorIndex) -> None:
     await index.upsert([point])
     await index.delete([point.id])
     assert await index.search(vec(0), None, limit=10) == []
+
+
+def test_client_kwargs_embedded_vs_remote(tmp_path: Path) -> None:
+    assert client_kwargs(tmp_path / "qdrant") == {"path": str(tmp_path / "qdrant")}
+    assert client_kwargs(tmp_path, url="https://qdrant.example.com:6333") == {
+        "url": "https://qdrant.example.com:6333"
+    }
+    assert client_kwargs(tmp_path, url="https://q.example.com", api_key="secret") == {
+        "url": "https://q.example.com",
+        "api_key": "secret",
+    }
+
+
+async def test_dimension_mismatch_fails_fast(tmp_path: Path) -> None:
+    first = QdrantVectorIndex(tmp_path / "qdrant", "dim_check")
+    await first.initialize(DIM)
+    await first.close()
+
+    second = QdrantVectorIndex(tmp_path / "qdrant", "dim_check")
+    with pytest.raises(VectorDimensionMismatchError, match="dimension"):
+        await second.initialize(DIM * 2)
+
+    # Matching dimension still opens fine.
+    third = QdrantVectorIndex(tmp_path / "qdrant", "dim_check")
+    await third.initialize(DIM)
+    await third.close()
