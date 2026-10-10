@@ -180,8 +180,38 @@ weights, existing services/data, the PR branch and its review worktree.
 Official references checked 2026-10-10:
 [MCP Streamable HTTP 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports),
 [Python SDK v1.x](https://github.com/modelcontextprotocol/python-sdk/tree/v1.x).
-This repo's `uv.lock` pins MCP 1.28.1; it uses the v1 FastMCP API, not the SDK
-main branch's newer v2/2026 transport. Compatibility target is stateless
-2025-11-25 JSON responses with initialization/discovery/calls. Other protocol
-versions follow the pinned SDK's supported-version negotiation; live Sites
-client compatibility remains to be verified after deployment.
+This repo's `uv.lock` pins MCP 1.28.1. HTTP also supports
+[2026-07-28 metadata](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning)
+and [HTTP header validation](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
+at the authenticated gateway, retaining the v1 SDK for tool execution and legacy
+initialization. Upgrade both backend and Worker when applying this compatibility
+fix; a Worker-only update cannot add modern support to an older backend.
+
+`server/discover` returns supported versions, tools capability, instructions,
+`resultType: "complete"`, and `_meta.io.modelcontextprotocol/serverInfo`. The
+Sites bootstrap probe with `params: {}` (or absent params) is accepted without
+per-request metadata, solely for discovery. All modern tool requests require
+`params._meta.io.modelcontextprotocol/protocolVersion`,
+`params._meta.io.modelcontextprotocol/clientCapabilities`, matching
+`MCP-Protocol-Version`/`Mcp-Method`, and `Mcp-Name` for `tools/call`. Optional
+clientInfo is validated but never used as identity. Missing/mismatched headers
+return `-32020`; unsupported versions return `-32022` with supported/requested
+versions. Body metadata is validated afresh for every call, with no handshake,
+session or remembered client capabilities. The Worker forwards the required
+method/name headers as well as the version header.
+
+Modern tools/list and tools/call run through the same stateless legacy SDK
+handlers, preserving tool schemas, content/structuredContent, result bounds,
+tool execution errors and provenance. Successful modern result envelopes add
+`resultType` and serverInfo; the server advertises no streaming, subscriptions,
+sampling, elicitation, prompt/resource or extension capability on modern HTTP.
+Unknown modern methods return HTTP 404 / JSON-RPC `-32601`. Legacy HTTP and
+stdio behavior remain unchanged. Tests validate actual legacy-backend results,
+not merely Worker mocks or an HTTP 200. Live Sites compatibility remains an
+independent deployment acceptance step.
+
+For a short keyless read-only live check against a dedicated empty fixture DB,
+call `graph_get_sources` with `graph_item_id: "sites-validation-missing"`:
+the normal result has that item ID and `sources: []`, with no embedding/reranker
+load, provider key, record write or customer data access. `rag_search` would
+load the configured embedding model and is not the lightest probe.

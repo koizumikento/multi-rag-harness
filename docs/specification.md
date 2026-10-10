@@ -79,6 +79,10 @@ authorization boundaries. HTTP ingestion is confined to a dedicated corpus
 root. Default library/CLI/stdio behavior remains local-first. See
 [sites-deployment.md](sites-deployment.md) for deployment prerequisites, runtime
 secret names, packaging, supported protocol and separate acceptance evidence.
+HTTP supports 2026-07-28 discovery and per-request metadata at the gateway,
+bridging tool execution to the unchanged stateless v1 SDK; legacy HTTP/stdio
+retain their existing contracts. Modern discovery advertises tools only and
+modern results include resultType/serverInfo without changing tool payloads.
 
 ### Codex / Codex SDK
 

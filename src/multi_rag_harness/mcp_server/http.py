@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from mcp.server.transport_security import TransportSecuritySettings
+from mcp.server.transport_security import TransportSecurityMiddleware, TransportSecuritySettings
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.applications import Starlette
@@ -17,6 +17,7 @@ from starlette.routing import Mount
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from multi_rag_harness.config import Settings
+from multi_rag_harness.mcp_server.modern_http import modern_response
 from multi_rag_harness.mcp_server.server import (
     AppContainer,
     build_container,
@@ -54,6 +55,11 @@ class BackendGateway:
     def __init__(self, http: HttpSettings) -> None:
         self.http = http
         self.app: ASGIApp | None = None
+        self.server_info: dict = {}
+        self.instructions = ""
+        self.security = TransportSecurityMiddleware(
+            TransportSecuritySettings(allowed_hosts=[http.allowed_host], allowed_origins=[])
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         request = Request(scope, receive)
@@ -90,10 +96,21 @@ class BackendGateway:
                 )
                 return
 
+        invalid = await self.security.validate_request(request, is_post=True)
+        if invalid is not None:
+            await invalid(scope, receive, send)
+            return
+
         async def replay() -> dict:
             return {"type": "http.request", "body": bytes(body), "more_body": False}
 
         assert self.app is not None
+        response = await modern_response(
+            request, bytes(body), self.app, self.server_info, self.instructions
+        )
+        if response is not None:
+            await response(scope, receive, send)
+            return
         await self.app(scope, replay, send)
 
 
@@ -120,6 +137,9 @@ def create_http_app(
                 allowed_hosts=[http.allowed_host], allowed_origins=[]
             )
             gateway.app = mcp.streamable_http_app()
+            options = mcp._mcp_server.create_initialization_options()
+            gateway.server_info = {"name": options.server_name, "version": options.server_version}
+            gateway.instructions = options.instructions or ""
             async with mcp.session_manager.run():
                 yield
         finally:

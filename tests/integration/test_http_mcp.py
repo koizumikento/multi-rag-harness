@@ -12,6 +12,13 @@ from pydantic import SecretStr
 
 from multi_rag_harness.config import Settings
 from multi_rag_harness.mcp_server.http import HttpSettings, create_http_app
+from multi_rag_harness.mcp_server.modern_http import (
+    CAPABILITIES_KEY,
+    MODERN_VERSION,
+    PROTOCOL_KEY,
+    SERVER_INFO_KEY,
+    SUPPORTED_VERSIONS,
+)
 from multi_rag_harness.mcp_server.server import build_container, close_container, create_server
 from tests.fakes import FakeCodexClient, FakeEmbedder, FakeReranker
 from tests.integration.test_codex_extraction import DOC_TEXT, VALID_RESPONSE
@@ -84,6 +91,232 @@ async def rpc(client, method, params=None):
 
 async def call(client, name, arguments):
     return (await rpc(client, "tools/call", {"name": name, "arguments": arguments}))["result"]
+
+
+async def modern_rpc(client, method, params=None, *, headers=None):
+    params = dict(params or {})
+    params.setdefault(
+        "_meta",
+        {
+            PROTOCOL_KEY: MODERN_VERSION,
+            CAPABILITIES_KEY: {},
+            "io.modelcontextprotocol/clientInfo": {"name": "fixture-modern", "version": "1"},
+        },
+    )
+    envelope = {
+        "MCP-Protocol-Version": MODERN_VERSION,
+        "Mcp-Method": method,
+        **({"Mcp-Name": params["name"]} if "name" in params else {}),
+        **(headers or {}),
+    }
+    return await client.post(
+        "/mcp",
+        headers=envelope,
+        json={
+            "jsonrpc": "2.0",
+            "id": "modern-fixture",
+            "method": method,
+            "params": params,
+        },
+    )
+
+
+async def test_sites_bootstrap_discovery_and_full_modern_discovery(http_harness):
+    client, built, _ = http_harness
+    for response in [
+        await client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": "bootstrap", "method": "server/discover", "params": {}},
+        ),
+        await modern_rpc(client, "server/discover"),
+    ]:
+        assert response.status_code == 200
+        assert "mcp-session-id" not in response.headers
+        payload = response.json()
+        assert "error" not in payload
+        result = payload["result"]
+        assert result["supportedVersions"] == SUPPORTED_VERSIONS
+        assert result["capabilities"] == {"tools": {}}
+        assert result["resultType"] == "complete"
+        assert result["_meta"][SERVER_INFO_KEY]["name"] == built.settings.mcp.server_name
+        assert result["_meta"][SERVER_INFO_KEY]["version"]
+        assert result["instructions"] == built.settings.mcp.instructions
+
+
+async def test_modern_tools_use_real_legacy_handlers_and_keep_results(http_harness):
+    client, built, corpus = http_harness
+    listed = await modern_rpc(client, "tools/list")
+    assert listed.status_code == 200
+    result = listed.json()["result"]
+    assert result["tools"] == (await rpc(client, "tools/list"))["result"]["tools"]
+    assert {tool["name"] for tool in result["tools"]} == EXPECTED_TOOLS
+    assert result["resultType"] == "complete"
+    # No initialize handshake; the real v1 SDK creates the lifespan/tool context.
+    ingested = await modern_rpc(
+        client,
+        "tools/call",
+        {
+            "name": "rag_ingest_path",
+            "arguments": {"path": str(corpus), "options": {"extract": True}},
+        },
+    )
+    assert ingested.json()["result"]["structuredContent"]["documents_ingested"] == 2
+    args = {"query": "embedded graph store", "rerank": True, "top_k": 3}
+    found = await modern_rpc(client, "tools/call", {"name": "rag_search", "arguments": args})
+    modern = found.json()["result"]
+    legacy = await call(client, "rag_search", args)
+    assert modern["structuredContent"] == legacy["structuredContent"]
+    hit = modern["structuredContent"]["results"][0]
+    assert hit["source_id"] and hit["source_path"] and hit["excerpt"]
+    await built.extraction.run_pending()
+    entities = await modern_rpc(
+        client, "tools/call", {"name": "graph_search_entities", "arguments": {"query": "Kuzu"}}
+    )
+    entity_id = entities.json()["result"]["structuredContent"]["results"][0]["id"]
+    for kind, payload in {
+        "trace": {"task": "fixture retrieval", "outcome": "success"},
+        "decision": {"title": "fixture RRF", "decision": "use RRF", "rationale": "fixture"},
+        "failure": {"error_text": "fixture error"},
+        "tool": {"server": "fixture", "name": "search", "description": "fixture search"},
+    }.items():
+        stored = await modern_rpc(
+            client,
+            "tools/call",
+            {"name": f"memory_store_{kind}", "arguments": {"payload": payload}},
+        )
+        assert stored.json()["result"]["structuredContent"]["record_id"]
+    read_args = {
+        **{
+            f"{kind}_search": {"query": "fixture RRF", "rerank": True, "top_k": 3}
+            for kind in ["trace", "decision", "error", "code", "tool"]
+        },
+        "rag_get_source": {"source_id": hit["id"]},
+        "graph_search_claims": {"query": "embedded graph store"},
+        "graph_expand": {"entity_id": entity_id, "depth": 2},
+        "graph_get_sources": {"graph_item_id": entity_id},
+    }
+    for name, arguments in read_args.items():
+        actual = (
+            await modern_rpc(client, "tools/call", {"name": name, "arguments": arguments})
+        ).json()["result"]
+        assert not actual["isError"]
+        assert (
+            actual["structuredContent"]
+            == (await call(client, name, arguments))["structuredContent"]
+        )
+    missing = await modern_rpc(
+        client, "tools/call", {"name": "rag_get_source", "arguments": {"source_id": "missing"}}
+    )
+    assert missing.json()["result"]["isError"]
+    assert missing.json()["result"]["resultType"] == "complete"
+    keyless = await modern_rpc(
+        client,
+        "tools/call",
+        {"name": "graph_get_sources", "arguments": {"graph_item_id": "sites-validation-missing"}},
+    )
+    assert keyless.json()["result"]["structuredContent"] == {
+        "graph_item_id": "sites-validation-missing",
+        "sources": [],
+    }
+
+
+async def test_modern_invalid_json_envelopes_and_no_capability_carryover(http_harness):
+    client, _, _ = http_harness
+    for body, code in [
+        ("invalid", -32700),
+        ("[]", -32600),
+        ('{"id":1,"method":"tools/list"}', -32600),
+    ]:
+        response = await client.post(
+            "/mcp",
+            content=body,
+            headers={"Content-Type": "application/json", "MCP-Protocol-Version": MODERN_VERSION},
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == code
+    assert (await modern_rpc(client, "server/discover")).status_code == 200
+    # A previous discovery never supplies metadata/capabilities to a later call.
+    response = await client.post(
+        "/mcp",
+        headers={"MCP-Protocol-Version": MODERN_VERSION, "Mcp-Method": "tools/list"},
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+    )
+    assert response.status_code == 400 and response.json()["error"]["code"] == -32602
+    rejected = await modern_rpc(client, "tools/list", headers={"Accept": "application/json"})
+    assert rejected.status_code == 406
+    for params in [
+        {
+            "_meta": {
+                PROTOCOL_KEY: MODERN_VERSION,
+                CAPABILITIES_KEY: [],
+                "io.modelcontextprotocol/clientInfo": {"name": "client"},
+            }
+        },
+        {"_meta": None},
+    ]:
+        assert (await modern_rpc(client, "tools/list", params)).status_code == 400
+
+
+@pytest.mark.parametrize(
+    "headers,meta,code",
+    [
+        ({"Mcp-Method": "wrong"}, None, -32020),
+        ({"MCP-Protocol-Version": "2025-11-25"}, None, -32020),
+        ({"Mcp-Method": ""}, None, -32020),
+        ({}, {}, -32602),
+        ({}, {PROTOCOL_KEY: MODERN_VERSION}, -32602),
+        (
+            {"MCP-Protocol-Version": "2025-11-25"},
+            {PROTOCOL_KEY: "2025-11-25", CAPABILITIES_KEY: {}},
+            -32602,
+        ),
+        (
+            {"MCP-Protocol-Version": "2099-01-01"},
+            {PROTOCOL_KEY: "2099-01-01", CAPABILITIES_KEY: {}},
+            -32022,
+        ),
+    ],
+)
+async def test_modern_metadata_and_header_validation(http_harness, headers, meta, code):
+    client, _, _ = http_harness
+    response = await modern_rpc(
+        client, "tools/list", {"_meta": meta} if meta is not None else {}, headers=headers
+    )
+    assert response.status_code == 400
+    assert "result" not in response.json()
+    assert response.json()["error"]["code"] == code
+    if code == -32022:
+        assert response.json()["error"]["data"] == {
+            "supported": SUPPORTED_VERSIONS,
+            "requested": "2099-01-01",
+        }
+
+
+async def test_modern_tool_name_header_errors_methods_and_auth(http_harness):
+    client, _, _ = http_harness
+    params = {"name": "graph_get_sources", "arguments": {"graph_item_id": "fixture"}}
+    for name in ["wrong", "", "=?base64?invalid!?="]:
+        response = await modern_rpc(client, "tools/call", params, headers={"Mcp-Name": name})
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == -32020
+    encoded = "=?base64?Z3JhcGhfZ2V0X3NvdXJjZXM=?="
+    assert (
+        await modern_rpc(client, "tools/call", params, headers={"Mcp-Name": encoded})
+    ).status_code == 200
+    unknown = await modern_rpc(client, "unknown/method")
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == -32601
+    for method, args in [("server/discover", {}), ("tools/list", {}), ("tools/call", params)]:
+        for headers, status in [
+            ({"Authorization": ""}, 401),
+            ({"X-MRH-Site-User-ID": "other"}, 403),
+        ]:
+            assert (await modern_rpc(client, method, args, headers=headers)).status_code == status
+    for headers, status in [
+        ({"Host": "attacker.example"}, 421),
+        ({"Origin": "https://attacker.example"}, 403),
+    ]:
+        assert (await modern_rpc(client, "server/discover", headers=headers)).status_code == status
 
 
 async def test_official_http_client_session(http_harness):
