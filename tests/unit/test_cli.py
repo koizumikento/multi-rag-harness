@@ -72,5 +72,36 @@ def test_extract_command_with_no_pending_runs(monkeypatch, tmp_path: Path) -> No
 def test_help_lists_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("serve", "ingest", "extract", "config-show"):
+    for command in ("serve", "serve-http", "ingest", "extract", "config-show"):
         assert command in result.output
+
+
+def test_http_command_uses_env_and_loopback(monkeypatch, tmp_path: Path) -> None:
+    import uvicorn
+
+    monkeypatch.setenv("MRH_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("MRH_HTTP_BACKEND_TOKEN", "fixture-token-with-at-least-32-characters")
+    monkeypatch.setenv("MRH_HTTP_SITE_USER_ID", "fixture-owner")
+    monkeypatch.setenv("MRH_HTTP_INGEST_ROOT", str(tmp_path))
+    monkeypatch.setenv("MRH_HTTP_ALLOWED_HOST", "fixture.example")
+    # Storage must sit outside the corpus; no server/process or real model is started.
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    monkeypatch.setenv("MRH_HTTP_INGEST_ROOT", str(corpus))
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
+    result = runner.invoke(app, ["serve-http", "--port", "8765"])
+    assert result.exit_code == 0, result.output
+    assert calls == [{"host": "127.0.0.1", "port": 8765, "access_log": False}]
+
+
+def test_http_command_config_error_does_not_print_secret(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("MRH_HTTP_BACKEND_TOKEN", "private-short-token")
+    monkeypatch.setenv("MRH_HTTP_SITE_USER_ID", "fixture-owner")
+    monkeypatch.setenv("MRH_HTTP_INGEST_ROOT", str(tmp_path))
+    monkeypatch.setenv("MRH_HTTP_ALLOWED_HOST", "fixture.example")
+    result = runner.invoke(app, ["serve-http"])
+    assert result.exit_code != 0
+    assert "private-short-token" not in result.output
+    assert "private-short-token" not in str(result.exception)
+    assert not app.pretty_exceptions_show_locals

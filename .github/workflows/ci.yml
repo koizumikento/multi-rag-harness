@@ -44,3 +44,15 @@ jobs:
 
       - name: Build distributions
         run: uv build --sdist --wheel --out-dir /tmp/multi-rag-harness-dist
+
+      - name: Set up Node for Sites adapter
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Verify Sites adapter and artifact
+        working-directory: sites
+        run: |
+          npm test
+          npm run build
+          npm run validate
