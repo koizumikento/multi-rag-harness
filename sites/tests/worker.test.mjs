@@ -98,3 +98,27 @@ test("aborted request stream returns a bounded error", async () => {
   assert.equal(result.status, 400);
   assert.ok(!(await result.text()).includes("private"));
 });
+
+test("modern discovery and calls forward metadata headers and preserve actual backend errors", async () => {
+  for (const method of ["server/discover", "tools/list", "tools/call"]) {
+    const params = { _meta: {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+      "io.modelcontextprotocol/clientInfo": { name: "modern-fixture", version: "1" },
+    }, ...(method === "tools/call" ? { name: "graph_get_sources", arguments: { graph_item_id: "fixture" } } : {}) };
+    const message = { jsonrpc: "2.0", id: 7, method, params };
+    const sdkError = { jsonrpc: "2.0", id: 7, error: { code: -32601, message: "Method not found" } };
+    globalThis.fetch = async (_, init) => {
+      assert.equal(init.headers.get("Mcp-Method"), method);
+      assert.equal(init.headers.get("MCP-Protocol-Version"), "2026-07-28");
+      assert.equal(init.headers.get("Mcp-Name"), method === "tools/call" ? "graph_get_sources" : null);
+      assert.deepEqual(JSON.parse(new TextDecoder().decode(init.body)), message);
+      return Response.json(sdkError);
+    };
+    const response = await worker.fetch(request(message, {
+      "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": method,
+      ...(method === "tools/call" ? { "Mcp-Name": "graph_get_sources" } : {}),
+    }), env);
+    assert.deepEqual(await response.json(), sdkError); // HTTP 200 is not discovery success.
+  }
+});

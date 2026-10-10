@@ -70,6 +70,10 @@ export default {
     });
     const version = request.headers.get("MCP-Protocol-Version");
     if (version) headers.set("MCP-Protocol-Version", version);
+    for (const name of ["Mcp-Method", "Mcp-Name"]) {
+      const value = request.headers.get(name);
+      if (value !== null) headers.set(name, value);
+    }
     try {
       const result = await fetch(backend, {
         method: "POST", headers, body, redirect: "manual",

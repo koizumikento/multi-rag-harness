@@ -37,8 +37,14 @@ jobs:
       - name: Type check
         run: uv run ty check
 
+      - name: Install isolated modern MCP client for interoperability test
+        run: |
+          uv venv "$RUNNER_TEMP/mrh-sdk2-client"
+          uv pip install --python "$RUNNER_TEMP/mrh-sdk2-client/bin/python" 'mcp==2.3.0'
+
       - name: Test
         run: |
+          export MRH_MODERN_CLIENT_PYTHON="$RUNNER_TEMP/mrh-sdk2-client/bin/python"
           uv run coverage run -m pytest
           uv run coverage report
 
