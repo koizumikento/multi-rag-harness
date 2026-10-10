@@ -188,8 +188,11 @@ initialization. Upgrade both backend and Worker when applying this compatibility
 fix; a Worker-only update cannot add modern support to an older backend.
 
 `server/discover` returns supported versions, tools capability, instructions,
-`resultType: "complete"`, and `_meta.io.modelcontextprotocol/serverInfo`. The
-Sites bootstrap probe with `params: {}` (or absent params) is accepted without
+`resultType: "complete"`, and `_meta.io.modelcontextprotocol/serverInfo`.
+Discovery and tools/list complete results include the required
+[cache hints](https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching)
+`cacheScope: "private"` and `ttlMs: 0`, consistent with HTTP `Cache-Control: no-store`.
+The Sites bootstrap probe with `params: {}` (or absent params) is accepted without
 per-request metadata, solely for discovery. All modern tool requests require
 `params._meta.io.modelcontextprotocol/protocolVersion`,
 `params._meta.io.modelcontextprotocol/clientCapabilities`, matching
@@ -209,6 +212,13 @@ Unknown modern methods return HTTP 404 / JSON-RPC `-32601`. Legacy HTTP and
 stdio behavior remain unchanged. Tests validate actual legacy-backend results,
 not merely Worker mocks or an HTTP 200. Live Sites compatibility remains an
 independent deployment acceptance step.
+
+CI runs a separate, pinned SDK 2.3.0 client environment against the real SDK
+1.28.1 backend through mocked HTTP, covering discovery, all 16 tool contracts
+and the keyless graph read. To run that regression locally, set
+`MRH_MODERN_CLIENT_PYTHON` to a Python interpreter with `mcp==2.3.0`; the backend
+still runs with the repository's locked dependencies. No socket or live service
+is used by the regression.
 
 For a short keyless read-only live check against a dedicated empty fixture DB,
 call `graph_get_sources` with `graph_item_id: "sites-validation-missing"`:

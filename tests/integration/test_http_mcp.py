@@ -1,6 +1,8 @@
 """Isolated HTTP contract/tenant tests, real storage and fake models only."""
 
 import asyncio
+import json
+import os
 from pathlib import Path
 
 import httpx
@@ -138,6 +140,8 @@ async def test_sites_bootstrap_discovery_and_full_modern_discovery(http_harness)
         assert result["supportedVersions"] == SUPPORTED_VERSIONS
         assert result["capabilities"] == {"tools": {}}
         assert result["resultType"] == "complete"
+        assert result["cacheScope"] == "private" and result["ttlMs"] == 0
+        assert response.headers["cache-control"] == "no-store"
         assert result["_meta"][SERVER_INFO_KEY]["name"] == built.settings.mcp.server_name
         assert result["_meta"][SERVER_INFO_KEY]["version"]
         assert result["instructions"] == built.settings.mcp.instructions
@@ -151,6 +155,8 @@ async def test_modern_tools_use_real_legacy_handlers_and_keep_results(http_harne
     assert result["tools"] == (await rpc(client, "tools/list"))["result"]["tools"]
     assert {tool["name"] for tool in result["tools"]} == EXPECTED_TOOLS
     assert result["resultType"] == "complete"
+    assert result["cacheScope"] == "private" and result["ttlMs"] == 0
+    assert listed.headers["cache-control"] == "no-store"
     # No initialize handshake; the real v1 SDK creates the lifespan/tool context.
     ingested = await modern_rpc(
         client,
@@ -329,6 +335,96 @@ async def test_official_http_client_session(http_harness):
             assert not result.isError
             found = await session.call_tool("rag_search", {"query": "embedded graph store"})
             assert found.structuredContent and found.structuredContent["results"]
+
+
+async def test_official_sdk2_discovers_lists_and_calls_real_backend(http_harness):
+    """Separate SDK environments; only mocked HTTP crosses the process boundary."""
+    python = os.environ.get("MRH_MODERN_CLIENT_PYTHON")
+    if not python:
+        pytest.skip("SDK 2.3.0 client interpreter is configured in CI")
+    client, _, _ = http_harness
+    program = r"""
+import asyncio
+import importlib.metadata
+import json
+import sys
+import httpx2
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+
+async def handle(request):
+    print(json.dumps({"method": request.method, "headers": dict(request.headers),
+                      "body": request.content.decode()}), flush=True)
+    wire = json.loads(await asyncio.to_thread(sys.stdin.readline))
+    return httpx2.Response(wire["status"], headers=wire["headers"],
+                           content=wire["body"].encode(), request=request)
+
+async def main():
+    assert importlib.metadata.version("mcp") == "2.3.0"
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
+        async with streamable_http_client("https://backend.example/mcp", http_client=http,
+                                          terminate_on_close=False) as streams:
+            async with ClientSession(*streams) as session:
+                discovered = await session.discover()
+                assert "2026-07-28" in discovered.supported_versions
+                assert discovered.cache_scope == "private" and discovered.ttl_ms == 0
+                listed = await session.list_tools()
+                assert listed.cache_scope == "private" and listed.ttl_ms == 0
+                result = await session.call_tool("graph_get_sources",
+                    {"graph_item_id": "sites-validation-missing"})
+                assert not result.is_error
+                print(json.dumps({"done": True, "tools": [tool.name for tool in listed.tools],
+                                  "result": result.structured_content}), flush=True)
+
+asyncio.run(main())
+"""
+    process = await asyncio.create_subprocess_exec(
+        python,
+        "-B",
+        "-c",
+        program,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert process.stdin and process.stdout and process.stderr
+    completed = None
+    methods = []
+    try:
+        async with asyncio.timeout(30):
+            while line := await process.stdout.readline():
+                wire = json.loads(line)
+                if wire.get("done"):
+                    completed = wire
+                    continue
+                methods.append(json.loads(wire["body"])["method"])
+                response = await client.request(
+                    wire["method"], "/mcp", headers=wire["headers"], content=wire["body"]
+                )
+                process.stdin.write(
+                    (
+                        json.dumps(
+                            {
+                                "status": response.status_code,
+                                "headers": dict(response.headers),
+                                "body": response.text,
+                            }
+                        )
+                        + "\n"
+                    ).encode()
+                )
+                await process.stdin.drain()
+            errors = (await process.stderr.read()).decode()
+            assert await process.wait() == 0, errors
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+    assert completed is not None
+    assert set(completed["tools"]) == EXPECTED_TOOLS
+    assert completed["result"] == {"graph_item_id": "sites-validation-missing", "sources": []}
+    assert methods[0] == "server/discover" and methods[-1] == "tools/call"
+    assert "tools/list" in methods
 
 
 async def test_backend_owns_storage_for_process_lifetime(settings, tmp_path, monkeypatch):

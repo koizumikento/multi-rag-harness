@@ -130,6 +130,8 @@ async def modern_response(
                     "capabilities": {"tools": {}},
                     "instructions": instructions,
                     "resultType": "complete",
+                    "cacheScope": "private",
+                    "ttlMs": 0,
                     "_meta": result_meta,
                 },
             },
@@ -158,5 +160,7 @@ async def modern_response(
     if "result" in response:
         response["result"]["resultType"] = "complete"
         response["result"].setdefault("_meta", {}).update(result_meta)
+        if rpc.method == "tools/list":
+            response["result"].update(cacheScope="private", ttlMs=0)
     status = next(event["status"] for event in events if event["type"] == "http.response.start")
     return JSONResponse(response, status_code=status, headers={"Cache-Control": "no-store"})

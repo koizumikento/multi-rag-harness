@@ -83,6 +83,8 @@ HTTP supports 2026-07-28 discovery and per-request metadata at the gateway,
 bridging tool execution to the unchanged stateless v1 SDK; legacy HTTP/stdio
 retain their existing contracts. Modern discovery advertises tools only and
 modern results include resultType/serverInfo without changing tool payloads.
+Complete discovery/tools/list results carry private cache scope and zero TTL,
+matching no-store HTTP responses and preventing reuse across authorization contexts.
 
 ### Codex / Codex SDK
 
