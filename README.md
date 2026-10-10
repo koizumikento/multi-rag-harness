@@ -12,6 +12,8 @@ the first stable release.
 See [docs/specification.md](docs/specification.md) for the design,
 [docs/mcp-tools.md](docs/mcp-tools.md) for the tool contracts, and
 [docs/storage.md](docs/storage.md) for the storage layer.
+For the Sites Worker adapter and its required private Python backend, see
+[docs/sites-deployment.md](docs/sites-deployment.md).
 
 ## Installation
 

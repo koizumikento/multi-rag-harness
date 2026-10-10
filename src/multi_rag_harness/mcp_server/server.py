@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -128,6 +129,7 @@ def create_server(
     reranker: Reranker | None = None,
     codex_client: CodexClient | None = None,
     container: AppContainer | None = None,
+    ingest_root: Path | None = None,
 ) -> FastMCP:
     """Assemble the FastMCP server. A prebuilt ``container`` skips lifecycle
     management (used by tests that seed data through the container)."""
@@ -151,7 +153,7 @@ def create_server(
         instructions=settings.mcp.instructions,
         lifespan=lifespan,
     )
-    register_tools(mcp)
+    register_tools(mcp, ingest_root=ingest_root)
     return mcp
 
 

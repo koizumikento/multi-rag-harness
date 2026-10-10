@@ -16,7 +16,11 @@ from rich.table import Table
 
 from multi_rag_harness.config import load_settings
 
-app = typer.Typer(name="multi-rag-harness", help="Multi-RAG retrieval and memory substrate.")
+app = typer.Typer(
+    name="multi-rag-harness",
+    help="Multi-RAG retrieval and memory substrate.",
+    pretty_exceptions_show_locals=False,  # Configuration locals can contain runtime secrets.
+)
 console = Console()
 
 ConfigOption = Annotated[Path | None, typer.Option("--config", help="Path to a TOML config file.")]
@@ -34,6 +38,24 @@ def serve(config: ConfigOption = None) -> None:
     from multi_rag_harness.mcp_server.server import run_stdio
 
     run_stdio(load_settings(config))
+
+
+@app.command("serve-http")
+def serve_http(
+    config: ConfigOption = None,
+    port: Annotated[int, typer.Option(min=1, max=65535)] = 8000,
+) -> None:
+    """Run the authenticated Sites backend on loopback (one tenant per process)."""
+    import uvicorn
+
+    from multi_rag_harness.mcp_server.http import HttpSettings, create_http_app
+
+    uvicorn.run(
+        create_http_app(load_settings(config), HttpSettings()),  # ty: ignore[missing-argument]
+        host="127.0.0.1",
+        port=port,
+        access_log=False,
+    )
 
 
 @app.command()

@@ -71,10 +71,11 @@ class IngestionPipeline:
         *,
         kind_override: str | None = None,
         extract: bool | None = None,
+        allowed_root: Path | None = None,
     ) -> IngestReport:
         report = IngestReport()
         do_extract = self._settings.codex.auto_extract_on_ingest if extract is None else extract
-        for loaded in iter_documents(path):
+        for loaded in iter_documents(path, allowed_root=allowed_root):
             kind = kind_override or loaded.kind
             existing = await self._metadata.find_document_by_uri(loaded.source_uri, scope)
             if existing is not None and existing.content_hash == loaded.content_hash:

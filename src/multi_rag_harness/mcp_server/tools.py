@@ -48,7 +48,7 @@ def _graph_search_response(query: str, results: list[SearchResult]) -> SearchRes
     return SearchResponse(results=results, query=query, reranked=False)
 
 
-def register_tools(mcp: FastMCP) -> None:  # noqa: C901
+def register_tools(mcp: FastMCP, *, ingest_root: Path | None = None) -> None:  # noqa: C901
     @mcp.tool()
     async def rag_ingest_path(
         path: str,
@@ -68,6 +68,7 @@ def register_tools(mcp: FastMCP) -> None:  # noqa: C901
             tags=tags,
             kind_override=options.kind,
             extract=options.extract,
+            allowed_root=ingest_root,
         )
         return IngestResponse(**report.model_dump())
 

@@ -97,9 +97,11 @@ def _load_file(file: Path) -> LoadedDocument | None:
     )
 
 
-def iter_documents(root: Path) -> Iterator[LoadedDocument]:
+def iter_documents(root: Path, *, allowed_root: Path | None = None) -> Iterator[LoadedDocument]:
     """Yield loadable documents under ``root`` (a file or a directory)."""
     root = root.expanduser()
+    if allowed_root is not None and not root.resolve().is_relative_to(allowed_root):
+        raise ValueError("ingest path must be inside the configured corpus root")
     if root.is_file():
         loaded = _load_file(root)
         if loaded is not None:
@@ -108,6 +110,8 @@ def iter_documents(root: Path) -> Iterator[LoadedDocument]:
     if not root.is_dir():
         raise FileNotFoundError(f"ingest path does not exist: {root}")
     for file in sorted(root.rglob("*")):
+        if allowed_root is not None and not file.resolve().is_relative_to(allowed_root):
+            raise ValueError("corpus contains a link outside the configured corpus root")
         if not file.is_file():
             continue
         if any(part in SKIP_DIRS for part in file.parts):

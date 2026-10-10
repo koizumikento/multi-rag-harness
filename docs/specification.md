@@ -67,6 +67,19 @@ Local retrieval and storage layer
 
 ## Role Boundaries
 
+### Optional Sites HTTP deployment
+
+`sites/` provides the stateless Worker ESM `POST /mcp` adapter; Sites owns OAuth
+and authenticates its Site-scoped user. A separately hosted Python backend
+(`serve-http`) retains all 16 existing tool contracts, persistence, retrieval,
+graph execution, local models and provenance. It validates both service secret
+and configured owner for every request. One Site/owner has one isolated backend,
+data directory and vector collection; scopes are retrieval filters rather than
+authorization boundaries. HTTP ingestion is confined to a dedicated corpus
+root. Default library/CLI/stdio behavior remains local-first. See
+[sites-deployment.md](sites-deployment.md) for deployment prerequisites, runtime
+secret names, packaging, supported protocol and separate acceptance evidence.
+
 ### Codex / Codex SDK
 
 Codex is the agentic controller when it uses this MCP tool surface. Codex SDK is
